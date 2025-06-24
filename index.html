@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Carte des lieux de concert</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-o9N1jLkGChO44zFVkR98MlvRIpA5MCOCkR2iGZ3hZLM=" crossorigin="" />
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; }
+    #map { height: 60vh; width: 100%; }
+    form { padding: 1em; background: #f4f4f4; }
+    label { display: block; margin-top: 0.5em; }
+    input, textarea { width: 100%; padding: 0.5em; }
+    button { margin-top: 1em; padding: 0.5em 1em; }
+  </style>
+</head>
+<body>
+  <h1 style="padding: 1em;">📍 Carte des lieux démarchés</h1>
+  <div id="map"></div>
+  <form id="lieu-form">
+    <label>Nom du lieu : <input type="text" id="nom" required></label>
+    <label>Adresse ou ville : <input type="text" id="adresse" required></label>
+    <label>Date (optionnel) : <input type="text" id="date"></label>
+    <label>Remarques : <textarea id="notes"></textarea></label>
+    <button type="submit">Ajouter</button>
+    <button type="button" onclick="exporterJSON()">📤 Exporter les données</button>
+    <input type="file" id="import-file" accept="application/json" onchange="importerJSON()">
+  </form>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o9N1jLkGChO44zFVkR98MlvRIpA5MCOCkR2iGZ3hZLM=" crossorigin=""></script>
+  <script>
+    let map = L.map('map').setView([46.8, 2.5], 6);
+    let lieux = [];
+    const stockageCle = 'lieux_concert';
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    function ajouterLieu(lieu) {
+      lieux.push(lieu);
+      localStorage.setItem(stockageCle, JSON.stringify(lieux));
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(lieu.adresse)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data[0]) {
+            const lat = parseFloat(data[0].lat);
+            const lon = parseFloat(data[0].lon);
+            const marker = L.marker([lat, lon]).addTo(map);
+            marker.bindPopup(`<strong>${lieu.nom}</strong><br>${lieu.date || ''}<br>${lieu.notes || ''}`);
+          } else {
+            alert("Adresse introuvable.");
+          }
+        });
+    }
+
+    function chargerLieux() {
+      const donnees = localStorage.getItem(stockageCle);
+      if (donnees) {
+        lieux = JSON.parse(donnees);
+        lieux.forEach(ajouterLieu);
+      }
+    }
+
+    document.getElementById("lieu-form").addEventListener("submit", e => {
+      e.preventDefault();
+      const lieu = {
+        nom: document.getElementById("nom").value,
+        adresse: document.getElementById("adresse").value,
+        date: document.getElementById("date").value,
+        notes: document.getElementById("notes").value
+      };
+      ajouterLieu(lieu);
+      document.getElementById("lieu-form").reset();
+    });
+
+    function exporterJSON() {
+      const blob = new Blob([JSON.stringify(lieux, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'lieux_concert.json';
+      a.click();
+    }
+
+    function importerJSON() {
+      const file = document.getElementById("import-file").files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          lieux = JSON.parse(e.target.result);
+          localStorage.setItem(stockageCle, JSON.stringify(lieux));
+          location.reload();
+        } catch (err) {
+          alert("Erreur de lecture JSON");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    chargerLieux();
+  </script>
+</body>
+</html>

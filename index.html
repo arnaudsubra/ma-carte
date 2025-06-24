@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Carte des lieux démarchés</title>
   <link
     rel="stylesheet"
@@ -14,7 +14,8 @@
     body { margin: 0; font-family: sans-serif; }
     #map { height: 60vh; width: 100%; }
     form { padding: 1em; background: #f4f4f4; }
-    input, textarea { width: 100%; margin-top: 0.5em; padding: 0.5em; }
+    label { display: block; margin-top: 0.5em; }
+    input, textarea { width: 100%; padding: 0.5em; margin-top: 0.3em; }
     button { margin-top: 1em; padding: 0.5em 1em; }
   </style>
 </head>
@@ -24,15 +25,18 @@
   <form id="lieu-form">
     <label>Nom du lieu : <input type="text" id="nom" required /></label>
     <label>Adresse ou ville : <input type="text" id="adresse" required /></label>
+    <label>Type de lieu : <input type="text" id="type" /></label>
     <label>Date (optionnel) : <input type="text" id="date" /></label>
     <label>Remarques : <textarea id="notes"></textarea></label>
     <button type="submit">Ajouter</button>
     <button type="button" onclick="exporterJSON()">📤 Exporter</button>
+    <button type="button" onclick="effacerLieux()">🗑️ Tout effacer</button>
     <input type="file" id="import-file" accept="application/json" onchange="importerJSON()" />
   </form>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-o9N1jLkGChO44zFVkR98MlvRIpA5MCOCkR2iGZ3hZLM=" crossorigin=""></script>
+    integrity="sha256-o9N1jLkGChO44zFVkR98MlvRIpA5MCOCkR2iGZ3hZLM="
+    crossorigin=""></script>
   <script>
     let map = L.map('map').setView([46.8, 2.5], 6);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -43,9 +47,7 @@
     let lieux = [];
     const stockageCle = 'lieux_concert';
 
-    function ajouterLieu(lieu) {
-      lieux.push(lieu);
-      localStorage.setItem(stockageCle, JSON.stringify(lieux));
+    function afficherMarqueur(lieu) {
       fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(lieu.adresse)}`)
         .then(res => res.json())
         .then(data => {
@@ -53,28 +55,44 @@
             const lat = parseFloat(data[0].lat);
             const lon = parseFloat(data[0].lon);
             const marker = L.marker([lat, lon]).addTo(map);
-            marker.bindPopup(`<strong>${lieu.nom}</strong><br>${lieu.date || ''}<br>${lieu.notes || ''}`).openPopup();
+            const contenu = `
+              <strong>${lieu.nom}</strong><br>
+              ${lieu.type ? `<em>${lieu.type}</em><br>` : ""}
+              ${lieu.date ? `${lieu.date}<br>` : ""}
+              ${lieu.notes || ""}
+            `;
+            marker.bindPopup(contenu).openPopup();
+            map.setView([lat, lon], 10);
           } else {
-            alert("Adresse introuvable.");
+            alert("Adresse introuvable : " + lieu.adresse);
           }
-        });
+        })
+        .catch(() => alert("Erreur réseau lors de la géolocalisation"));
+    }
+
+    function ajouterLieu(lieu) {
+      lieux.push(lieu);
+      localStorage.setItem(stockageCle, JSON.stringify(lieux));
+      afficherMarqueur(lieu);
     }
 
     function chargerLieux() {
       const donnees = localStorage.getItem(stockageCle);
       if (donnees) {
-        lieux = JSON.parse(donnees);
-        lieux.forEach(ajouterLieu);
+        const lieuxCharges = JSON.parse(donnees);
+        lieux = lieuxCharges;
+        lieux.forEach(afficherMarqueur);
       }
     }
 
     document.getElementById("lieu-form").addEventListener("submit", e => {
       e.preventDefault();
       const lieu = {
-        nom: document.getElementById("nom").value,
-        adresse: document.getElementById("adresse").value,
-        date: document.getElementById("date").value,
-        notes: document.getElementById("notes").value
+        nom: document.getElementById("nom").value.trim(),
+        adresse: document.getElementById("adresse").value.trim(),
+        type: document.getElementById("type").value.trim(),
+        date: document.getElementById("date").value.trim(),
+        notes: document.getElementById("notes").value.trim()
       };
       ajouterLieu(lieu);
       document.getElementById("lieu-form").reset();
@@ -95,14 +113,25 @@
       const reader = new FileReader();
       reader.onload = function(e) {
         try {
-          lieux = JSON.parse(e.target.result);
-          localStorage.setItem(stockageCle, JSON.stringify(lieux));
-          location.reload();
+          const nouveauxLieux = JSON.parse(e.target.result);
+          if (Array.isArray(nouveauxLieux)) {
+            localStorage.setItem(stockageCle, JSON.stringify(nouveauxLieux));
+            location.reload();
+          } else {
+            alert("Le fichier JSON n'est pas valide.");
+          }
         } catch (err) {
-          alert("Erreur de lecture JSON");
+          alert("Erreur de lecture JSON.");
         }
       };
       reader.readAsText(file);
+    }
+
+    function effacerLieux() {
+      if (confirm("Supprimer tous les lieux enregistrés ?")) {
+        localStorage.removeItem(stockageCle);
+        location.reload();
+      }
     }
 
     chargerLieux();

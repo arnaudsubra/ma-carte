@@ -105,7 +105,6 @@
 
     document.getElementById("formulaire").addEventListener("submit", e => {
       e.preventDefault();
-      const id = document.getElementById("id-lieu").value || 'lieu_' + Math.random().toString(36).substr(2, 9);
       const nom = document.getElementById("nom").value.trim();
       const adresse = document.getElementById("adresse").value.trim();
       const date = document.getElementById("date").value;
@@ -118,13 +117,20 @@
           if (data && data[0]) {
             const lat = parseFloat(data[0].lat);
             const lon = parseFloat(data[0].lon);
-            const lieu = { id, nom, adresse, date, remarques, statut, lat, lon };
-            const index = lieux.findIndex(l => l.id === id);
+
+            let currentId = document.getElementById("id-lieu").value;
+            if (!currentId || !lieux.find(l => l.id === currentId)) {
+              currentId = 'lieu_' + Math.random().toString(36).substr(2, 9);
+            }
+
+            const lieu = { id: currentId, nom, adresse, date, remarques, statut, lat, lon };
+            const index = lieux.findIndex(l => l.id === currentId);
             if (index !== -1) {
               lieux[index] = lieu;
             } else {
               lieux.push(lieu);
             }
+
             localStorage.setItem("lieux", JSON.stringify(lieux));
             afficherListe();
             ajouterMarqueurs();

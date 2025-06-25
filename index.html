@@ -96,6 +96,7 @@
 
     let lieux = JSON.parse(localStorage.getItem('lieux')) || [];
     let markers = [];
+    let coordMemo = {}; // pour mémoriser les doublons
 
     function getColor(statut) {
       switch (statut) {
@@ -109,12 +110,22 @@
     function ajouterMarqueurs() {
       markers.forEach(m => map.removeLayer(m));
       markers = [];
+      coordMemo = {}; // reset coord
       lieux.forEach((lieu, index) => {
         fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(lieu.adresse)}`)
           .then(res => res.json())
           .then(data => {
             if (data[0]) {
-              let marker = L.circleMarker([data[0].lat, data[0].lon], {
+              let lat = parseFloat(data[0].lat);
+              let lon = parseFloat(data[0].lon);
+              let cle = lat.toFixed(5) + "," + lon.toFixed(5);
+              if (coordMemo[cle]) {
+                lat += Math.random() * 0.001 - 0.0005;
+                lon += Math.random() * 0.001 - 0.0005;
+              } else {
+                coordMemo[cle] = true;
+              }
+              let marker = L.circleMarker([lat, lon], {
                 radius: 8,
                 fillColor: getColor(lieu.statut),
                 color: "#000",

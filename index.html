@@ -6,25 +6,60 @@
   <title>Carte des lieux démarchés</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-    h1 { padding: 20px; text-align: center; }
-    #map { height: 400px; width: 100%; }
-    form { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-    input, select, textarea, button { font-size: 1em; padding: 6px; }
-    .legend { display: flex; gap: 10px; padding: 10px; }
-    .legend span { display: flex; align-items: center; gap: 5px; }
-    .legend-box { width: 12px; height: 12px; display: inline-block; }
-    .btns { display: flex; gap: 10px; flex-wrap: wrap; }
-    #liste-lieux { padding: 20px; }
-    .lieu-entry { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; scroll-margin-top: 100px; }
-    #loading { text-align: center; padding: 10px; display: none; }
-    @media (max-width: 600px) { #map { height: 300px; } }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      padding: 20px;
+      text-align: center;
+    }
+    #map {
+      height: 500px;
+    }
+    form {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    input, select, textarea, button {
+      font-size: 1em;
+      padding: 6px;
+    }
+    .legend {
+      display: flex;
+      gap: 10px;
+      padding: 10px;
+    }
+    .legend span {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .legend-box {
+      width: 12px;
+      height: 12px;
+      display: inline-block;
+    }
+    .btns {
+      display: flex;
+      gap: 10px;
+    }
+    #liste-lieux {
+      padding: 20px;
+    }
+    .lieu-entry {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
   <h1>📍 Carte des lieux démarchés</h1>
   <div id="map"></div>
-  <div id="loading">Chargement des marqueurs…</div>
   <form id="formulaire">
     <label>Nom du lieu : <input type="text" id="nom" required /></label>
     <label>Adresse ou ville : <input type="text" id="adresse" required autocomplete="off" /></label>
@@ -73,7 +108,6 @@
     }
 
     function ajouterMarqueurs() {
-      document.getElementById("loading").style.display = "block";
       markers.forEach(m => map.removeLayer(m));
       markers = [];
       coordMemo = {};
@@ -88,6 +122,7 @@
             cle = lat.toFixed(5) + "," + lon.toFixed(5);
           }
           coordMemo[cle] = true;
+
           let marker = L.circleMarker([lat, lon], {
             radius: 8,
             fillColor: getColor(lieu.statut),
@@ -96,17 +131,15 @@
             opacity: 1,
             fillOpacity: 0.8
           }).addTo(map);
-          marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`).on('click', () => {
-            const target = document.getElementById("lieu-" + index);
-            if (target) target.scrollIntoView({ behavior: "smooth" });
+
+          marker.on('click', () => {
+            document.getElementById("lieu-" + index)?.scrollIntoView({ behavior: "smooth" });
           });
+
+          marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`);
           markers.push(marker);
         }
       });
-      setTimeout(() => {
-        document.getElementById("loading").style.display = "none";
-      }, 300);
-      afficherListe();
     }
 
     function afficherListe() {
@@ -116,7 +149,9 @@
           ${lieu.adresse}<br />
           ${lieu.date || ''}<br />
           ${lieu.remarques || ''}<br />
-          <em>${lieu.statut}</em>
+          <em>${lieu.statut}</em><br />
+          <button onclick="remplirFormulaire(${index})">✏️ Modifier</button>
+          <button onclick="supprimerLieu(${index})">🗑️ Supprimer</button>
         </div>`).join('');
     }
 
@@ -142,6 +177,7 @@
               lieux.push(lieu);
             }
             localStorage.setItem("lieux", JSON.stringify(lieux));
+            afficherListe();
             ajouterMarqueurs();
             e.target.reset();
           } else {
@@ -149,6 +185,24 @@
           }
         });
     });
+
+    function remplirFormulaire(index) {
+      const lieu = lieux[index];
+      document.getElementById("nom").value = lieu.nom;
+      document.getElementById("adresse").value = lieu.adresse;
+      document.getElementById("date").value = lieu.date || '';
+      document.getElementById("remarques").value = lieu.remarques || '';
+      document.getElementById("statut-lieu").value = lieu.statut;
+    }
+
+    function supprimerLieu(index) {
+      if (confirm("Supprimer ce lieu ?")) {
+        lieux.splice(index, 1);
+        localStorage.setItem("lieux", JSON.stringify(lieux));
+        afficherListe();
+        ajouterMarqueurs();
+      }
+    }
 
     function exporterJSON() {
       const blob = new Blob([JSON.stringify(lieux, null, 2)], { type: "application/json" });
@@ -165,6 +219,7 @@
         try {
           lieux = JSON.parse(e.target.result);
           localStorage.setItem("lieux", JSON.stringify(lieux));
+          afficherListe();
           ajouterMarqueurs();
         } catch {
           alert("Fichier invalide");
@@ -177,10 +232,12 @@
       if (confirm("Tout effacer ?")) {
         lieux = [];
         localStorage.removeItem("lieux");
+        afficherListe();
         ajouterMarqueurs();
       }
     }
 
+    afficherListe();
     ajouterMarqueurs();
   </script>
 </body>

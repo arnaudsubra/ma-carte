@@ -47,23 +47,20 @@
       display: flex;
       gap: 10px;
     }
-    #loading {
-      text-align: center;
-      padding: 10px;
-      display: none;
+    .highlight {
+      background-color: #ffffcc !important;
+      transition: background-color 0.8s ease;
     }
-    .fiche {
+    .lieu-entry {
       border: 1px solid #ccc;
       padding: 10px;
-      margin: 10px;
+      margin-bottom: 10px;
     }
   </style>
 </head>
 <body>
   <h1>📍 Carte des lieux démarchés</h1>
   <div id="map"></div>
-  <div id="loading">Chargement des marqueurs…</div>
-
   <form id="formulaire">
     <input type="hidden" id="lieu-id" />
     <label>Nom du lieu : <input type="text" id="nom" required /></label>
@@ -84,14 +81,12 @@
     </div>
     <input type="file" id="fichier-import" accept=".json" onchange="importerJSON(event)" />
   </form>
-
   <div class="legend">
     <span><div class="legend-box" style="background-color: blue;"></div>En attente</span>
     <span><div class="legend-box" style="background-color: red;"></div>À relancer</span>
     <span><div class="legend-box" style="background-color: green;"></div>Confirmé</span>
   </div>
-
-  <div id="fiches"></div>
+  <div id="liste-lieux"></div>
 
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
   <script>
@@ -102,10 +97,8 @@
     }).addTo(map);
 
     let lieux = JSON.parse(localStorage.getItem('lieux')) || [];
-    lieux.forEach(lieu => {
-      if (!lieu.id) lieu.id = crypto.randomUUID();
-    });
-    localStorage.setItem('lieux', JSON.stringify(lieux));
+    lieux.forEach(l => { if (!l.id) l.id = Date.now().toString() + Math.random(); });
+    localStorage.setItem("lieux", JSON.stringify(lieux));
 
     let markers = [];
     let coordMemo = {};
@@ -120,15 +113,10 @@
     }
 
     function ajouterMarqueurs() {
-      document.getElementById("loading").style.display = "block";
       markers.forEach(m => map.removeLayer(m));
       markers = [];
       coordMemo = {};
-
-      const conteneur = document.getElementById("fiches");
-      conteneur.innerHTML = "";
-
-      lieux.forEach((lieu, index) => {
+      lieux.forEach((lieu) => {
         if (lieu.lat && lieu.lon) {
           let lat = parseFloat(lieu.lat);
           let lon = parseFloat(lieu.lon);
@@ -148,54 +136,49 @@
             opacity: 1,
             fillOpacity: 0.8
           }).addTo(map);
+
           marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`);
           marker.on('click', () => {
-            document.getElementById(`fiche-${lieu.id}`)?.scrollIntoView({ behavior: "smooth" });
+            const entry = document.querySelector(`.lieu-entry[data-id="${lieu.id}"]`);
+            if (entry) {
+              entry.scrollIntoView({ behavior: "smooth", block: "center" });
+              entry.classList.add("highlight");
+              setTimeout(() => entry.classList.remove("highlight"), 2500);
+            }
           });
+
           markers.push(marker);
         }
-
-        const fiche = document.createElement("div");
-        fiche.className = "fiche";
-        fiche.id = `fiche-${lieu.id}`;
-        fiche.innerHTML = `
-          <b>${lieu.nom}</b><br>
-          ${lieu.adresse}<br>
-          ${lieu.date || ''}<br>
-          ${lieu.remarques || ''}<br>
-          <i>${lieu.statut}</i><br>
-          <button onclick="remplirFormulaire('${lieu.id}')">✏️ Modifier</button>
-          <button onclick="supprimerLieu('${lieu.id}')">🗑️ Supprimer</button>
-        `;
-        conteneur.appendChild(fiche);
       });
-      setTimeout(() => {
-        document.getElementById("loading").style.display = "none";
-      }, 300);
     }
 
-    function remplirFormulaire(id) {
-      const lieu = lieux.find(l => l.id === id);
+    function afficherListe() {
+      document.getElementById("liste-lieux").innerHTML = lieux.map((lieu, index) => `
+        <div class="lieu-entry" data-id="${lieu.id}">
+          <strong>${lieu.nom}</strong><br />
+          ${lieu.adresse}<br />
+          ${lieu.date || ''}<br />
+          ${lieu.remarques || ''}<br />
+          <em>${lieu.statut}</em><br />
+          <button onclick="remplirFormulaire(${index})">✏️ Modifier</button>
+          <button onclick="supprimerLieu('${lieu.id}')">🗑️ Supprimer</button>
+        </div>`).join('');
+    }
+
+    function remplirFormulaire(index) {
+      const lieu = lieux[index];
       document.getElementById("nom").value = lieu.nom;
       document.getElementById("adresse").value = lieu.adresse;
       document.getElementById("date").value = lieu.date || '';
       document.getElementById("remarques").value = lieu.remarques || '';
       document.getElementById("statut-lieu").value = lieu.statut;
-      document.getElementById("lieu-id").value = lieu.id;
+      document.getElementById("lieu-id").value = lieu.id || '';
       document.getElementById("formulaire").scrollIntoView({ behavior: "smooth" });
-    }
-
-    function supprimerLieu(id) {
-      if (confirm("Supprimer ce lieu ?")) {
-        lieux = lieux.filter(l => l.id !== id);
-        localStorage.setItem("lieux", JSON.stringify(lieux));
-        ajouterMarqueurs();
-      }
     }
 
     document.getElementById("formulaire").addEventListener("submit", e => {
       e.preventDefault();
-      const id = document.getElementById("lieu-id").value || crypto.randomUUID();
+      const id = document.getElementById("lieu-id").value || Date.now().toString();
       const nom = document.getElementById("nom").value;
       const adresse = document.getElementById("adresse").value;
       const date = document.getElementById("date").value;
@@ -216,14 +199,31 @@
               lieux.push(lieu);
             }
             localStorage.setItem("lieux", JSON.stringify(lieux));
+            afficherListe();
             ajouterMarqueurs();
             e.target.reset();
-            document.getElementById("lieu-id").value = "";
+            document.getElementById("lieu-id").value = '';
           } else {
             alert("Adresse introuvable");
           }
         });
     });
+
+    function supprimerLieu(id) {
+      lieux = lieux.filter(l => l.id !== id);
+      localStorage.setItem("lieux", JSON.stringify(lieux));
+      afficherListe();
+      ajouterMarqueurs();
+    }
+
+    function toutEffacer() {
+      if (confirm("Tout effacer ?")) {
+        lieux = [];
+        localStorage.removeItem("lieux");
+        afficherListe();
+        ajouterMarqueurs();
+      }
+    }
 
     function exporterJSON() {
       const blob = new Blob([JSON.stringify(lieux, null, 2)], { type: "application/json" });
@@ -239,8 +239,9 @@
       reader.onload = e => {
         try {
           lieux = JSON.parse(e.target.result);
-          lieux.forEach(lieu => { if (!lieu.id) lieu.id = crypto.randomUUID(); });
+          lieux.forEach(l => { if (!l.id) l.id = Date.now().toString() + Math.random(); });
           localStorage.setItem("lieux", JSON.stringify(lieux));
+          afficherListe();
           ajouterMarqueurs();
         } catch {
           alert("Fichier invalide");
@@ -249,14 +250,7 @@
       reader.readAsText(event.target.files[0]);
     }
 
-    function toutEffacer() {
-      if (confirm("Tout effacer ?")) {
-        lieux = [];
-        localStorage.removeItem("lieux");
-        ajouterMarqueurs();
-      }
-    }
-
+    afficherListe();
     ajouterMarqueurs();
   </script>
 </body>

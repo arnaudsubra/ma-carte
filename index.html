@@ -8,26 +8,33 @@
   <style>
     body { margin: 0; font-family: sans-serif; }
     #map { height: 60vh; width: 100%; }
-    form { padding: 1em; background: #f4f4f4; }
+    form, #lieux-list { padding: 1em; background: #f4f4f4; }
     label { display: block; margin-top: 0.5em; }
     input, textarea { width: 100%; padding: 0.5em; margin-top: 0.3em; }
     button { margin-top: 1em; padding: 0.5em 1em; }
+    .lieu-item { margin-bottom: 1em; background: #fff; padding: 0.5em; border-left: 4px solid #999; }
+    .lieu-item strong { display: block; font-size: 1.1em; }
+    .lieu-actions button { margin-right: 0.5em; }
   </style>
 </head>
 <body>
   <h1 style="padding: 1em;">📍 Carte des lieux démarchés</h1>
   <div id="map"></div>
+
   <form id="lieu-form">
+    <input type="hidden" id="edit-index" />
     <label>Nom du lieu : <input type="text" id="nom" required /></label>
     <label>Adresse ou ville : <input type="text" id="adresse" required /></label>
     <label>Type de lieu : <input type="text" id="type" /></label>
     <label>Date (optionnel) : <input type="text" id="date" /></label>
     <label>Remarques : <textarea id="notes"></textarea></label>
-    <button type="submit">Ajouter</button>
+    <button type="submit">Ajouter ou mettre à jour</button>
     <button type="button" onclick="exporterJSON()">📤 Exporter</button>
     <button type="button" onclick="effacerLieux()">🗑️ Tout effacer</button>
     <input type="file" id="import-file" accept="application/json" onchange="importerJSON()" />
   </form>
+
+  <div id="lieux-list"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
@@ -39,8 +46,9 @@
 
     let lieux = [];
     const stockageCle = 'lieux_concert';
+    let marqueurs = [];
 
-    function afficherMarqueur(lieu) {
+    function afficherMarqueur(lieu, index) {
       fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(lieu.adresse)}`)
         .then(res => res.json())
         .then(data => {
@@ -54,8 +62,8 @@
               ${lieu.date ? `${lieu.date}<br>` : ""}
               ${lieu.notes || ""}
             `;
-            marker.bindPopup(contenu).openPopup();
-            map.setView([lat, lon], 10);
+            marker.bindPopup(contenu);
+            marqueurs[index] = marker;
           } else {
             alert("Adresse introuvable : " + lieu.adresse);
           }
@@ -63,23 +71,60 @@
         .catch(() => alert("Erreur réseau lors de la géolocalisation"));
     }
 
-    function ajouterLieu(lieu) {
-      lieux.push(lieu);
-      localStorage.setItem(stockageCle, JSON.stringify(lieux));
-      afficherMarqueur(lieu);
+    function rechargerCarte() {
+      marqueurs.forEach(m => m?.remove());
+      marqueurs = [];
+      lieux.forEach(afficherMarqueur);
     }
 
-    function chargerLieux() {
-      const donnees = localStorage.getItem(stockageCle);
-      if (donnees) {
-        const lieuxCharges = JSON.parse(donnees);
-        lieux = lieuxCharges;
-        lieux.forEach(afficherMarqueur);
+    function sauvegarderEtAfficher() {
+      localStorage.setItem(stockageCle, JSON.stringify(lieux));
+      rechargerCarte();
+      afficherListe();
+    }
+
+    function afficherListe() {
+      const conteneur = document.getElementById("lieux-list");
+      conteneur.innerHTML = "";
+      lieux.forEach((lieu, index) => {
+        const div = document.createElement("div");
+        div.className = "lieu-item";
+        div.innerHTML = `
+          <strong>${lieu.nom}</strong>
+          ${lieu.adresse}<br>
+          ${lieu.type ? `<em>${lieu.type}</em><br>` : ""}
+          ${lieu.date ? `${lieu.date}<br>` : ""}
+          ${lieu.notes || ""}
+          <div class="lieu-actions">
+            <button onclick="editerLieu(${index})">✏️ Modifier</button>
+            <button onclick="supprimerLieu(${index})">🗑️ Supprimer</button>
+          </div>
+        `;
+        conteneur.appendChild(div);
+      });
+    }
+
+    function editerLieu(index) {
+      const lieu = lieux[index];
+      document.getElementById("edit-index").value = index;
+      document.getElementById("nom").value = lieu.nom;
+      document.getElementById("adresse").value = lieu.adresse;
+      document.getElementById("type").value = lieu.type || "";
+      document.getElementById("date").value = lieu.date || "";
+      document.getElementById("notes").value = lieu.notes || "";
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function supprimerLieu(index) {
+      if (confirm("Supprimer ce lieu ?")) {
+        lieux.splice(index, 1);
+        sauvegarderEtAfficher();
       }
     }
 
     document.getElementById("lieu-form").addEventListener("submit", e => {
       e.preventDefault();
+      const index = document.getElementById("edit-index").value;
       const lieu = {
         nom: document.getElementById("nom").value.trim(),
         adresse: document.getElementById("adresse").value.trim(),
@@ -87,7 +132,13 @@
         date: document.getElementById("date").value.trim(),
         notes: document.getElementById("notes").value.trim()
       };
-      ajouterLieu(lieu);
+      if (index !== "") {
+        lieux[index] = lieu;
+        document.getElementById("edit-index").value = "";
+      } else {
+        lieux.push(lieu);
+      }
+      sauvegarderEtAfficher();
       document.getElementById("lieu-form").reset();
     });
 
@@ -108,8 +159,8 @@
         try {
           const nouveauxLieux = JSON.parse(e.target.result);
           if (Array.isArray(nouveauxLieux)) {
-            localStorage.setItem(stockageCle, JSON.stringify(nouveauxLieux));
-            location.reload();
+            lieux = nouveauxLieux;
+            sauvegarderEtAfficher();
           } else {
             alert("Le fichier JSON n'est pas valide.");
           }
@@ -123,7 +174,18 @@
     function effacerLieux() {
       if (confirm("Supprimer tous les lieux enregistrés ?")) {
         localStorage.removeItem(stockageCle);
-        location.reload();
+        lieux = [];
+        marqueurs.forEach(m => m?.remove());
+        marqueurs = [];
+        afficherListe();
+      }
+    }
+
+    function chargerLieux() {
+      const donnees = localStorage.getItem(stockageCle);
+      if (donnees) {
+        lieux = JSON.parse(donnees);
+        sauvegarderEtAfficher();
       }
     }
 

@@ -16,7 +16,8 @@
       text-align: center;
     }
     #map {
-      height: 500px;
+      height: 400px;
+      width: 100%;
     }
     form {
       padding: 20px;
@@ -54,6 +55,12 @@
     .btns {
       display: flex;
       gap: 10px;
+      flex-wrap: wrap;
+    }
+    @media (max-width: 600px) {
+      #map {
+        height: 300px;
+      }
     }
   </style>
 </head>
@@ -73,7 +80,7 @@
         <option value="Confirmé">Confirmé</option>
       </select>
     </label>
-    <button type="submit">Ajouter ou mettre à jour</button>
+    <button type="submit" id="btn-submit">Ajouter</button>
     <div class="btns">
       <button type="button" onclick="exporterJSON()">📤 Exporter</button>
       <button type="button" onclick="toutEffacer()">🗑️ Tout effacer</button>
@@ -98,6 +105,7 @@
     let lieux = JSON.parse(localStorage.getItem('lieux')) || [];
     let markers = [];
     let coordMemo = {};
+    const geocodeCache = {};
 
     function genererID() {
       return 'lieu_' + Math.random().toString(36).substr(2, 9);
@@ -122,8 +130,8 @@
           let lon = parseFloat(lieu.lon);
           let cle = lat.toFixed(5) + "," + lon.toFixed(5);
           if (coordMemo[cle]) {
-            lat += Math.random() * 0.001 - 0.0005;
-            lon += Math.random() * 0.001 - 0.0005;
+            lat += Math.random() * 0.0008 - 0.0004;
+            lon += Math.random() * 0.0008 - 0.0004;
           } else {
             coordMemo[cle] = true;
           }
@@ -135,14 +143,14 @@
             opacity: 1,
             fillOpacity: 0.8
           }).addTo(map);
-          marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`);
+          marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}<br>${lieu.date || ''}`);
           markers.push(marker);
         }
       });
     }
 
     function afficherListe() {
-      document.getElementById("liste-lieux").innerHTML = lieux.map((lieu, index) => `
+      document.getElementById("liste-lieux").innerHTML = lieux.map((lieu) => `
         <div class="lieu-entry">
           <strong>${lieu.nom}</strong><br />
           ${lieu.adresse}<br />
@@ -157,34 +165,45 @@
     document.getElementById("formulaire").addEventListener("submit", e => {
       e.preventDefault();
       const id = document.getElementById("id-lieu").value || genererID();
-      const nom = document.getElementById("nom").value;
-      const adresse = document.getElementById("adresse").value;
+      const nom = document.getElementById("nom").value.trim();
+      const adresse = document.getElementById("adresse").value.trim();
       const date = document.getElementById("date").value;
       const remarques = document.getElementById("remarques").value;
       const statut = document.getElementById("statut-lieu").value;
 
-      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(adresse)}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data && data[0]) {
-            const lat = parseFloat(data[0].lat);
-            const lon = parseFloat(data[0].lon);
-            const lieu = { id, nom, adresse, date, remarques, statut, lat, lon };
-            const index = lieux.findIndex(l => l.id === id);
-            if (index !== -1) {
-              lieux[index] = lieu;
+      if (!nom || !adresse) return;
+
+      const traiterLieu = (lat, lon) => {
+        const lieu = { id, nom, adresse, date, remarques, statut, lat, lon };
+        const index = lieux.findIndex(l => l.id === id);
+        if (index !== -1) {
+          lieux[index] = lieu;
+        } else {
+          lieux.push(lieu);
+        }
+        localStorage.setItem("lieux", JSON.stringify(lieux));
+        afficherListe();
+        ajouterMarqueurs();
+        e.target.reset();
+        document.getElementById("id-lieu").value = '';
+        document.getElementById("btn-submit").innerText = 'Ajouter';
+      };
+
+      if (geocodeCache[adresse]) {
+        traiterLieu(...geocodeCache[adresse]);
+      } else {
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(adresse)}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data && data[0]) {
+              const coords = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+              geocodeCache[adresse] = coords;
+              traiterLieu(...coords);
             } else {
-              lieux.push(lieu);
+              alert("Adresse introuvable");
             }
-            localStorage.setItem("lieux", JSON.stringify(lieux));
-            afficherListe();
-            ajouterMarqueurs();
-            e.target.reset();
-            document.getElementById("id-lieu").value = '';
-          } else {
-            alert("Adresse introuvable");
-          }
-        });
+          });
+      }
     });
 
     function modifierLieu(id) {
@@ -196,6 +215,7 @@
         document.getElementById("date").value = lieu.date;
         document.getElementById("remarques").value = lieu.remarques;
         document.getElementById("statut-lieu").value = lieu.statut;
+        document.getElementById("btn-submit").innerText = 'Mettre à jour';
       }
     }
 
@@ -228,7 +248,8 @@
       const reader = new FileReader();
       reader.onload = e => {
         try {
-          lieux = JSON.parse(e.target.result);
+          const data = JSON.parse(e.target.result);
+          lieux = data;
           localStorage.setItem("lieux", JSON.stringify(lieux));
           afficherListe();
           ajouterMarqueurs();

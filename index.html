@@ -149,35 +149,43 @@
         </div>`).join('');
     }
 
-    document.getElementById("formulaire").addEventListener("submit", e => {
+    document.getElementById("formulaire").addEventListener("submit", async e => {
       e.preventDefault();
-      const nom = document.getElementById("nom").value;
-      const adresse = document.getElementById("adresse").value;
+      const nom = document.getElementById("nom").value.trim();
+      const adresse = document.getElementById("adresse").value.trim();
       const date = document.getElementById("date").value;
       const remarques = document.getElementById("remarques").value;
       const statut = document.getElementById("statut-lieu").value;
 
-      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(adresse)}`)
-        .then(res => res.json())
-        .then(data => {
+      let lieu = lieux.find(l => l.nom === nom && l.adresse === adresse);
+
+      if (lieu && lieu.lat && lieu.lon) {
+        lieu.date = date;
+        lieu.remarques = remarques;
+        lieu.statut = statut;
+      } else {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(adresse)}`);
+          const data = await res.json();
           if (data && data[0]) {
             const lat = parseFloat(data[0].lat);
             const lon = parseFloat(data[0].lon);
-            const lieu = { nom, adresse, date, remarques, statut, lat, lon };
-            const index = lieux.findIndex(l => l.nom === nom && l.adresse === adresse);
-            if (index !== -1) {
-              lieux[index] = lieu;
-            } else {
-              lieux.push(lieu);
-            }
-            localStorage.setItem("lieux", JSON.stringify(lieux));
-            afficherListe();
-            ajouterMarqueurs();
-            e.target.reset();
+            lieu = { nom, adresse, date, remarques, statut, lat, lon };
+            lieux.push(lieu);
           } else {
             alert("Adresse introuvable");
+            return;
           }
-        });
+        } catch {
+          alert("Erreur lors de la géolocalisation");
+          return;
+        }
+      }
+
+      localStorage.setItem("lieux", JSON.stringify(lieux));
+      afficherListe();
+      ajouterMarqueurs();
+      e.target.reset();
     });
 
     function modifierLieu(index) {

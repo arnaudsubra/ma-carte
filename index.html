@@ -43,23 +43,21 @@
       height: 12px;
       display: inline-block;
     }
-    #liste-lieux {
-      padding: 20px;
-    }
-    .lieu-entry {
-      border: 1px solid #ccc;
-      padding: 10px;
-      margin-bottom: 10px;
-    }
     .btns {
       display: flex;
       gap: 10px;
+    }
+    #loading {
+      text-align: center;
+      padding: 10px;
+      display: none;
     }
   </style>
 </head>
 <body>
   <h1>📍 Carte des lieux démarchés</h1>
   <div id="map"></div>
+  <div id="loading">Chargement des marqueurs…</div>
   <form id="formulaire">
     <label>Nom du lieu : <input type="text" id="nom" required /></label>
     <label>Adresse ou ville : <input type="text" id="adresse" required autocomplete="off" /></label>
@@ -84,7 +82,6 @@
     <span><div class="legend-box" style="background-color: red;"></div>À relancer</span>
     <span><div class="legend-box" style="background-color: green;"></div>Confirmé</span>
   </div>
-  <div id="liste-lieux"></div>
 
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
   <script>
@@ -96,7 +93,7 @@
 
     let lieux = JSON.parse(localStorage.getItem('lieux')) || [];
     let markers = [];
-    let coordMemo = {}; // pour éviter les superpositions exactes
+    let coordMemo = {};
 
     function getColor(statut) {
       switch (statut) {
@@ -108,6 +105,7 @@
     }
 
     function ajouterMarqueurs() {
+      document.getElementById("loading").style.display = "block";
       markers.forEach(m => map.removeLayer(m));
       markers = [];
       coordMemo = {};
@@ -116,12 +114,13 @@
           let lat = parseFloat(lieu.lat);
           let lon = parseFloat(lieu.lon);
           let cle = lat.toFixed(5) + "," + lon.toFixed(5);
-          if (coordMemo[cle]) {
+          while (coordMemo[cle]) {
             lat += Math.random() * 0.001 - 0.0005;
             lon += Math.random() * 0.001 - 0.0005;
-          } else {
-            coordMemo[cle] = true;
+            cle = lat.toFixed(5) + "," + lon.toFixed(5);
           }
+          coordMemo[cle] = true;
+
           let marker = L.circleMarker([lat, lon], {
             radius: 8,
             fillColor: getColor(lieu.statut),
@@ -134,84 +133,40 @@
           markers.push(marker);
         }
       });
+      setTimeout(() => {
+        document.getElementById("loading").style.display = "none";
+      }, 300);
     }
 
-    function afficherListe() {
-      document.getElementById("liste-lieux").innerHTML = lieux.map((lieu, index) => `
-        <div class="lieu-entry">
-          <strong>${lieu.nom}</strong><br />
-          ${lieu.adresse}<br />
-          ${lieu.date || ''}<br />
-          ${lieu.remarques || ''}<br />
-          <em>${lieu.statut}</em><br />
-          <button onclick="modifierLieu(${index})">✏️ Modifier</button>
-          <button onclick="supprimerLieu(${index})">🗑️ Supprimer</button>
-        </div>`).join('');
-    }
-
-    document.getElementById("formulaire").addEventListener("submit", async e => {
+    document.getElementById("formulaire").addEventListener("submit", e => {
       e.preventDefault();
-      const nom = document.getElementById("nom").value.trim();
-      const adresse = document.getElementById("adresse").value.trim();
+      const nom = document.getElementById("nom").value;
+      const adresse = document.getElementById("adresse").value;
       const date = document.getElementById("date").value;
       const remarques = document.getElementById("remarques").value;
       const statut = document.getElementById("statut-lieu").value;
 
-      let lieu = lieux.find(l => l.nom === nom && l.adresse === adresse);
-
-      if (lieu && lieu.lat && lieu.lon) {
-        lieu.date = date;
-        lieu.remarques = remarques;
-        lieu.statut = statut;
-      } else {
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(adresse)}`);
-          const data = await res.json();
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(adresse)}`)
+        .then(res => res.json())
+        .then(data => {
           if (data && data[0]) {
             const lat = parseFloat(data[0].lat);
             const lon = parseFloat(data[0].lon);
-            lieu = { nom, adresse, date, remarques, statut, lat, lon };
-            lieux.push(lieu);
+            const lieu = { nom, adresse, date, remarques, statut, lat, lon };
+            const index = lieux.findIndex(l => l.nom === nom && l.adresse === adresse);
+            if (index !== -1) {
+              lieux[index] = lieu;
+            } else {
+              lieux.push(lieu);
+            }
+            localStorage.setItem("lieux", JSON.stringify(lieux));
+            ajouterMarqueurs();
+            e.target.reset();
           } else {
             alert("Adresse introuvable");
-            return;
           }
-        } catch {
-          alert("Erreur lors de la géolocalisation");
-          return;
-        }
-      }
-
-      localStorage.setItem("lieux", JSON.stringify(lieux));
-      afficherListe();
-      ajouterMarqueurs();
-      e.target.reset();
+        });
     });
-
-    function modifierLieu(index) {
-      const lieu = lieux[index];
-      document.getElementById("nom").value = lieu.nom;
-      document.getElementById("adresse").value = lieu.adresse;
-      document.getElementById("date").value = lieu.date;
-      document.getElementById("remarques").value = lieu.remarques;
-      document.getElementById("statut-lieu").value = lieu.statut;
-    }
-
-    function supprimerLieu(index) {
-      lieux.splice(index, 1);
-      localStorage.setItem("lieux", JSON.stringify(lieux));
-      afficherListe();
-      ajouterMarqueurs();
-    }
-
-    function toutEffacer() {
-      if (confirm("Tout effacer ?")) {
-        lieux = [];
-        localStorage.removeItem("lieux");
-        afficherListe();
-        ajouterMarqueurs();
-      }
-    }
 
     function exporterJSON() {
       const blob = new Blob([JSON.stringify(lieux, null, 2)], { type: "application/json" });
@@ -228,7 +183,6 @@
         try {
           lieux = JSON.parse(e.target.result);
           localStorage.setItem("lieux", JSON.stringify(lieux));
-          afficherListe();
           ajouterMarqueurs();
         } catch {
           alert("Fichier invalide");
@@ -237,7 +191,14 @@
       reader.readAsText(event.target.files[0]);
     }
 
-    afficherListe();
+    function toutEffacer() {
+      if (confirm("Tout effacer ?")) {
+        lieux = [];
+        localStorage.removeItem("lieux");
+        ajouterMarqueurs();
+      }
+    }
+
     ajouterMarqueurs();
   </script>
 </body>

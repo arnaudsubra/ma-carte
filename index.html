@@ -96,7 +96,7 @@
 
     let lieux = JSON.parse(localStorage.getItem('lieux')) || [];
     let markers = [];
-    let coordMemo = {}; // pour mémoriser les doublons
+    let coordMemo = {}; // pour éviter les superpositions exactes
 
     function getColor(statut) {
       switch (statut) {
@@ -110,33 +110,29 @@
     function ajouterMarqueurs() {
       markers.forEach(m => map.removeLayer(m));
       markers = [];
-      coordMemo = {}; // reset coord
-      lieux.forEach((lieu, index) => {
-        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(lieu.adresse)}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data[0]) {
-              let lat = parseFloat(data[0].lat);
-              let lon = parseFloat(data[0].lon);
-              let cle = lat.toFixed(5) + "," + lon.toFixed(5);
-              if (coordMemo[cle]) {
-                lat += Math.random() * 0.001 - 0.0005;
-                lon += Math.random() * 0.001 - 0.0005;
-              } else {
-                coordMemo[cle] = true;
-              }
-              let marker = L.circleMarker([lat, lon], {
-                radius: 8,
-                fillColor: getColor(lieu.statut),
-                color: "#000",
-                weight: 1,
-                opacity: 1,
-                fillOpacity: 0.8
-              }).addTo(map);
-              marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`);
-              markers.push(marker);
-            }
-          });
+      coordMemo = {};
+      lieux.forEach((lieu) => {
+        if (lieu.lat && lieu.lon) {
+          let lat = parseFloat(lieu.lat);
+          let lon = parseFloat(lieu.lon);
+          let cle = lat.toFixed(5) + "," + lon.toFixed(5);
+          if (coordMemo[cle]) {
+            lat += Math.random() * 0.001 - 0.0005;
+            lon += Math.random() * 0.001 - 0.0005;
+          } else {
+            coordMemo[cle] = true;
+          }
+          let marker = L.circleMarker([lat, lon], {
+            radius: 8,
+            fillColor: getColor(lieu.statut),
+            color: "#000",
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.8
+          }).addTo(map);
+          marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`);
+          markers.push(marker);
+        }
       });
     }
 
@@ -160,17 +156,28 @@
       const date = document.getElementById("date").value;
       const remarques = document.getElementById("remarques").value;
       const statut = document.getElementById("statut-lieu").value;
-      const lieu = { nom, adresse, date, remarques, statut };
-      const index = lieux.findIndex(l => l.nom === nom && l.adresse === adresse);
-      if (index !== -1) {
-        lieux[index] = lieu;
-      } else {
-        lieux.push(lieu);
-      }
-      localStorage.setItem("lieux", JSON.stringify(lieux));
-      afficherListe();
-      ajouterMarqueurs();
-      e.target.reset();
+
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(adresse)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data[0]) {
+            const lat = parseFloat(data[0].lat);
+            const lon = parseFloat(data[0].lon);
+            const lieu = { nom, adresse, date, remarques, statut, lat, lon };
+            const index = lieux.findIndex(l => l.nom === nom && l.adresse === adresse);
+            if (index !== -1) {
+              lieux[index] = lieu;
+            } else {
+              lieux.push(lieu);
+            }
+            localStorage.setItem("lieux", JSON.stringify(lieux));
+            afficherListe();
+            ajouterMarqueurs();
+            e.target.reset();
+          } else {
+            alert("Adresse introuvable");
+          }
+        });
     });
 
     function modifierLieu(index) {

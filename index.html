@@ -6,24 +6,62 @@
   <title>Carte des lieux démarchés</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-    h1 { padding: 20px; text-align: center; }
-    #map { height: 500px; }
-    form { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-    input, select, textarea, button { font-size: 1em; padding: 6px; }
-    .legend { display: flex; gap: 10px; padding: 10px; }
-    .legend span { display: flex; align-items: center; gap: 5px; }
-    .legend-box { width: 12px; height: 12px; display: inline-block; }
-    #liste-lieux { padding: 20px; }
-    .lieu-entry { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
-    .btns { display: flex; gap: 10px; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      padding: 20px;
+      text-align: center;
+    }
+    #map {
+      height: 500px;
+    }
+    form {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    input, select, textarea, button {
+      font-size: 1em;
+      padding: 6px;
+    }
+    .legend {
+      display: flex;
+      gap: 10px;
+      padding: 10px;
+    }
+    .legend span {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .legend-box {
+      width: 12px;
+      height: 12px;
+      display: inline-block;
+    }
+    #liste-lieux {
+      padding: 20px;
+    }
+    .lieu-entry {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    .btns {
+      display: flex;
+      gap: 10px;
+    }
   </style>
 </head>
 <body>
   <h1>📍 Carte des lieux démarchés</h1>
   <div id="map"></div>
   <form id="formulaire">
-    <input type="hidden" id="lieu-id" />
+    <input type="hidden" id="id-lieu" />
     <label>Nom du lieu : <input type="text" id="nom" required /></label>
     <label>Adresse ou ville : <input type="text" id="adresse" required autocomplete="off" /></label>
     <label>Date (optionnel) : <input type="date" id="date" /></label>
@@ -61,8 +99,8 @@
     let markers = [];
     let coordMemo = {};
 
-    function genererId() {
-      return 'lieu_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    function genererID() {
+      return 'lieu_' + Math.random().toString(36).substr(2, 9);
     }
 
     function getColor(statut) {
@@ -118,7 +156,7 @@
 
     document.getElementById("formulaire").addEventListener("submit", e => {
       e.preventDefault();
-      const id = document.getElementById("lieu-id").value || genererId();
+      const id = document.getElementById("id-lieu").value || genererID();
       const nom = document.getElementById("nom").value;
       const adresse = document.getElementById("adresse").value;
       const date = document.getElementById("date").value;
@@ -142,7 +180,7 @@
             afficherListe();
             ajouterMarqueurs();
             e.target.reset();
-            document.getElementById("lieu-id").value = "";
+            document.getElementById("id-lieu").value = '';
           } else {
             alert("Adresse introuvable");
           }
@@ -151,12 +189,14 @@
 
     function modifierLieu(id) {
       const lieu = lieux.find(l => l.id === id);
-      document.getElementById("lieu-id").value = lieu.id;
-      document.getElementById("nom").value = lieu.nom;
-      document.getElementById("adresse").value = lieu.adresse;
-      document.getElementById("date").value = lieu.date;
-      document.getElementById("remarques").value = lieu.remarques;
-      document.getElementById("statut-lieu").value = lieu.statut;
+      if (lieu) {
+        document.getElementById("id-lieu").value = lieu.id;
+        document.getElementById("nom").value = lieu.nom;
+        document.getElementById("adresse").value = lieu.adresse;
+        document.getElementById("date").value = lieu.date;
+        document.getElementById("remarques").value = lieu.remarques;
+        document.getElementById("statut-lieu").value = lieu.statut;
+      }
     }
 
     function supprimerLieu(id) {

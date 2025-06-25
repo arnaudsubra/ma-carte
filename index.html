@@ -1,173 +1,218 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Carte des lieux démarchés</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
   <style>
-    #map { height: 500px; margin-bottom: 1rem; }
-    form { margin-bottom: 1rem; }
-    label { display: block; margin-top: 0.5rem; }
-    input, select, textarea { width: 100%; padding: 0.5rem; }
-    .button-container { margin-top: 1rem; }
-    .button-container button { margin-right: 1rem; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      padding: 20px;
+      text-align: center;
+    }
+    #map {
+      height: 500px;
+    }
+    form {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    input, select, textarea, button {
+      font-size: 1em;
+      padding: 6px;
+    }
+    .legend {
+      display: flex;
+      gap: 10px;
+      padding: 10px;
+    }
+    .legend span {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .legend-box {
+      width: 12px;
+      height: 12px;
+      display: inline-block;
+    }
+    #liste-lieux {
+      padding: 20px;
+    }
+    .lieu-entry {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    .btns {
+      display: flex;
+      gap: 10px;
+    }
   </style>
 </head>
 <body>
-  <h1>🛘️ Carte des lieux démarchés</h1>
+  <h1>📍 Carte des lieux démarchés</h1>
   <div id="map"></div>
-  <form id="lieu-form">
-    <label for="nom">Nom du lieu :</label>
-    <input type="text" id="nom" required>
-
-    <label for="adresse">Adresse ou ville :</label>
-    <input type="text" id="adresse" required>
-
-    <label for="type">Type de lieu :</label>
-    <input type="text" id="type">
-
-    <label for="date">Date (optionnel) :</label>
-    <input type="text" id="date">
-
-    <label for="remarques">Remarques :</label>
-    <textarea id="remarques"></textarea>
-
-    <label for="statut">Statut :</label>
-    <select id="statut">
-      <option value="en_attente">En attente</option>
-      <option value="a_relancer">À relancer</option>
-      <option value="confirme">Confirmé</option>
-    </select>
-
-    <div class="button-container">
-      <button type="submit">Ajouter ou mettre à jour</button>
-      <button type="button" id="export-btn">Exporter</button>
-      <button type="button" id="clear-btn">Tout effacer</button>
+  <form id="formulaire">
+    <label>Nom du lieu : <input type="text" id="nom" required /></label>
+    <label>Adresse ou ville : <input type="text" id="adresse" required autocomplete="off" /></label>
+    <label>Date (optionnel) : <input type="date" id="date" /></label>
+    <label>Remarques : <textarea id="remarques"></textarea></label>
+    <label>Statut :
+      <select id="statut-lieu">
+        <option value="En attente">En attente</option>
+        <option value="À relancer">À relancer</option>
+        <option value="Confirmé">Confirmé</option>
+      </select>
+    </label>
+    <button type="submit">Ajouter ou mettre à jour</button>
+    <div class="btns">
+      <button type="button" onclick="exporterJSON()">📤 Exporter</button>
+      <button type="button" onclick="toutEffacer()">🗑️ Tout effacer</button>
     </div>
-
-    <input type="file" id="import-file">
+    <input type="file" id="fichier-import" accept=".json" onchange="importerJSON(event)" />
   </form>
-
+  <div class="legend">
+    <span><div class="legend-box" style="background-color: blue;"></div>En attente</span>
+    <span><div class="legend-box" style="background-color: red;"></div>À relancer</span>
+    <span><div class="legend-box" style="background-color: green;"></div>Confirmé</span>
+  </div>
   <div id="liste-lieux"></div>
 
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
   <script>
-    const map = L.map('map').setView([44.8378, -0.5792], 6);
+    let map = L.map('map').setView([44.8378, -0.5792], 8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    const markers = {};
+    let lieux = JSON.parse(localStorage.getItem('lieux')) || [];
+    let markers = [];
 
-    const couleurParStatut = {
-      en_attente: 'blue',
-      a_relancer: 'red',
-      confirme: 'green'
-    };
-
-    function ajouterMarqueur(lieu) {
-      const geocoder = new L.Control.Geocoder.Nominatim();
-      geocoder.geocode(lieu.adresse, function(results) {
-        if (results.length === 0) return;
-        const latlng = results[0].center;
-        const marker = L.circleMarker(latlng, {
-          radius: 8,
-          color: couleurParStatut[lieu.statut] || 'gray',
-          fillOpacity: 0.9
-        }).addTo(map);
-        marker.bindPopup(`<strong>${lieu.nom}</strong><br>${lieu.adresse}`);
-        markers[lieu.nom] = marker;
-      });
+    function getColor(statut) {
+      switch (statut) {
+        case "Confirmé": return "green";
+        case "À relancer": return "red";
+        case "En attente":
+        default: return "blue";
+      }
     }
 
-    function afficherLieux() {
-      const liste = document.getElementById('liste-lieux');
-      liste.innerHTML = '';
-      const lieux = JSON.parse(localStorage.getItem('lieux') || '[]');
+    function ajouterMarqueurs() {
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
       lieux.forEach((lieu, index) => {
-        const div = document.createElement('div');
-        div.innerHTML = `<p><strong>${lieu.nom}</strong><br>${lieu.adresse}<br>${lieu.type}<br>${lieu.date}<br>${lieu.remarques || ''}</p>`;
-        const btnModif = document.createElement('button');
-        btnModif.textContent = '✏️ Modifier';
-        btnModif.onclick = () => remplirFormulaire(lieu);
-        const btnSuppr = document.createElement('button');
-        btnSuppr.textContent = 'Supprimer';
-        btnSuppr.onclick = () => supprimerLieu(index);
-        div.appendChild(btnModif);
-        div.appendChild(btnSuppr);
-        liste.appendChild(div);
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(lieu.adresse)}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data[0]) {
+              let marker = L.circleMarker([data[0].lat, data[0].lon], {
+                radius: 8,
+                fillColor: getColor(lieu.statut),
+                color: "#000",
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.8
+              }).addTo(map);
+              marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`);
+              markers.push(marker);
+            }
+          });
       });
     }
 
-    function remplirFormulaire(lieu) {
-      document.getElementById('nom').value = lieu.nom;
-      document.getElementById('adresse').value = lieu.adresse;
-      document.getElementById('type').value = lieu.type;
-      document.getElementById('date').value = lieu.date;
-      document.getElementById('remarques').value = lieu.remarques;
-      document.getElementById('statut').value = lieu.statut;
+    function afficherListe() {
+      document.getElementById("liste-lieux").innerHTML = lieux.map((lieu, index) => `
+        <div class="lieu-entry">
+          <strong>${lieu.nom}</strong><br />
+          ${lieu.adresse}<br />
+          ${lieu.date || ''}<br />
+          ${lieu.remarques || ''}<br />
+          <em>${lieu.statut}</em><br />
+          <button onclick="modifierLieu(${index})">✏️ Modifier</button>
+          <button onclick="supprimerLieu(${index})">🗑️ Supprimer</button>
+        </div>`).join('');
+    }
+
+    document.getElementById("formulaire").addEventListener("submit", e => {
+      e.preventDefault();
+      const nom = document.getElementById("nom").value;
+      const adresse = document.getElementById("adresse").value;
+      const date = document.getElementById("date").value;
+      const remarques = document.getElementById("remarques").value;
+      const statut = document.getElementById("statut-lieu").value;
+      const lieu = { nom, adresse, date, remarques, statut };
+      const index = lieux.findIndex(l => l.nom === nom && l.adresse === adresse);
+      if (index !== -1) {
+        lieux[index] = lieu;
+      } else {
+        lieux.push(lieu);
+      }
+      localStorage.setItem("lieux", JSON.stringify(lieux));
+      afficherListe();
+      ajouterMarqueurs();
+      e.target.reset();
+    });
+
+    function modifierLieu(index) {
+      const lieu = lieux[index];
+      document.getElementById("nom").value = lieu.nom;
+      document.getElementById("adresse").value = lieu.adresse;
+      document.getElementById("date").value = lieu.date;
+      document.getElementById("remarques").value = lieu.remarques;
+      document.getElementById("statut-lieu").value = lieu.statut;
     }
 
     function supprimerLieu(index) {
-      const lieux = JSON.parse(localStorage.getItem('lieux') || '[]');
       lieux.splice(index, 1);
-      localStorage.setItem('lieux', JSON.stringify(lieux));
-      afficherLieux();
+      localStorage.setItem("lieux", JSON.stringify(lieux));
+      afficherListe();
+      ajouterMarqueurs();
     }
 
-    document.getElementById('lieu-form').addEventListener('submit', function(e) {
-      e.preventDefault();
-      const lieu = {
-        nom: document.getElementById('nom').value,
-        adresse: document.getElementById('adresse').value,
-        type: document.getElementById('type').value,
-        date: document.getElementById('date').value,
-        remarques: document.getElementById('remarques').value,
-        statut: document.getElementById('statut').value
-      };
-      let lieux = JSON.parse(localStorage.getItem('lieux') || '[]');
-      const index = lieux.findIndex(l => l.nom === lieu.nom);
-      if (index >= 0) lieux[index] = lieu;
-      else lieux.push(lieu);
-      localStorage.setItem('lieux', JSON.stringify(lieux));
-      ajouterMarqueur(lieu);
-      afficherLieux();
-      this.reset();
-    });
-
-    document.getElementById('export-btn').onclick = function() {
-      const data = localStorage.getItem('lieux');
-      const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'lieux.json';
-      a.click();
-    };
-
-    document.getElementById('clear-btn').onclick = function() {
-      if (confirm('Tout effacer ?')) {
-        localStorage.removeItem('lieux');
-        location.reload();
+    function toutEffacer() {
+      if (confirm("Tout effacer ?")) {
+        lieux = [];
+        localStorage.removeItem("lieux");
+        afficherListe();
+        ajouterMarqueurs();
       }
-    };
+    }
 
-    document.getElementById('import-file').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
+    function exporterJSON() {
+      const blob = new Blob([JSON.stringify(lieux, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "lieux.json";
+      a.click();
+    }
+
+    function importerJSON(event) {
       const reader = new FileReader();
-      reader.onload = function(event) {
-        localStorage.setItem('lieux', event.target.result);
-        location.reload();
+      reader.onload = e => {
+        try {
+          lieux = JSON.parse(e.target.result);
+          localStorage.setItem("lieux", JSON.stringify(lieux));
+          afficherListe();
+          ajouterMarqueurs();
+        } catch {
+          alert("Fichier invalide");
+        }
       };
-      reader.readAsText(file);
-    });
+      reader.readAsText(event.target.files[0]);
+    }
 
-    const lieux = JSON.parse(localStorage.getItem('lieux') || '[]');
-    lieux.forEach(ajouterMarqueur);
-    afficherLieux();
+    afficherListe();
+    ajouterMarqueurs();
   </script>
-  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 </body>
 </html>

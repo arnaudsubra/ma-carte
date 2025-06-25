@@ -10,11 +10,13 @@
     #map { height: 60vh; width: 100%; }
     form, #lieux-list { padding: 1em; background: #f4f4f4; }
     label { display: block; margin-top: 0.5em; }
-    input, textarea { width: 100%; padding: 0.5em; margin-top: 0.3em; }
+    input, select, textarea { width: 100%; padding: 0.5em; margin-top: 0.3em; }
     button { margin-top: 1em; padding: 0.5em 1em; }
     .lieu-item { margin-bottom: 1em; background: #fff; padding: 0.5em; border-left: 4px solid #999; }
     .lieu-item strong { display: block; font-size: 1.1em; }
     .lieu-actions button { margin-right: 0.5em; }
+    .legende { padding: 0.5em; font-size: 0.9em; background: #fff; position: absolute; bottom: 10px; left: 10px; z-index: 1000; border: 1px solid #ccc; border-radius: 4px; }
+    .color-box { display: inline-block; width: 10px; height: 10px; margin-right: 5px; }
   </style>
 </head>
 <body>
@@ -28,6 +30,13 @@
     <label>Type de lieu : <input type="text" id="type" /></label>
     <label>Date (optionnel) : <input type="text" id="date" /></label>
     <label>Remarques : <textarea id="notes"></textarea></label>
+    <label>Statut :
+      <select id="statut">
+        <option value="en_attente">En attente</option>
+        <option value="a_relancer">À relancer</option>
+        <option value="confirme">Confirmé</option>
+      </select>
+    </label>
     <button type="submit">Ajouter ou mettre à jour</button>
     <button type="button" onclick="exporterJSON()">📤 Exporter</button>
     <button type="button" onclick="effacerLieux()">🗑️ Tout effacer</button>
@@ -35,6 +44,11 @@
   </form>
 
   <div id="lieux-list"></div>
+  <div class="legende">
+    <div><span class="color-box" style="background: blue;"></span>En attente</div>
+    <div><span class="color-box" style="background: red;"></span>À relancer</div>
+    <div><span class="color-box" style="background: green;"></span>Confirmé</div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
@@ -48,6 +62,12 @@
     const stockageCle = 'lieux_concert';
     let marqueurs = [];
 
+    const couleurParStatut = {
+      en_attente: 'blue',
+      a_relancer: 'red',
+      confirme: 'green'
+    };
+
     function afficherMarqueur(lieu, index) {
       fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(lieu.adresse)}`)
         .then(res => res.json())
@@ -55,7 +75,13 @@
           if (data && data[0]) {
             const lat = parseFloat(data[0].lat);
             const lon = parseFloat(data[0].lon);
-            const marker = L.marker([lat, lon]).addTo(map);
+            const icon = L.divIcon({
+              className: 'custom-marker',
+              html: `<div style="background:${couleurParStatut[lieu.statut]};width:14px;height:14px;border-radius:50%;border:2px solid white"></div>`,
+              iconSize: [14, 14],
+              iconAnchor: [7, 7]
+            });
+            const marker = L.marker([lat, lon], { icon }).addTo(map);
             const contenu = `
               <strong>${lieu.nom}</strong><br>
               ${lieu.type ? `<em>${lieu.type}</em><br>` : ""}
@@ -64,11 +90,9 @@
             `;
             marker.bindPopup(contenu);
             marqueurs[index] = marker;
-          } else {
-            alert("Adresse introuvable : " + lieu.adresse);
           }
         })
-        .catch(() => alert("Erreur réseau lors de la géolocalisation"));
+        .catch(() => alert("Erreur lors de la géolocalisation"));
     }
 
     function rechargerCarte() {
@@ -112,6 +136,7 @@
       document.getElementById("type").value = lieu.type || "";
       document.getElementById("date").value = lieu.date || "";
       document.getElementById("notes").value = lieu.notes || "";
+      document.getElementById("statut").value = lieu.statut || "en_attente";
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -130,7 +155,8 @@
         adresse: document.getElementById("adresse").value.trim(),
         type: document.getElementById("type").value.trim(),
         date: document.getElementById("date").value.trim(),
-        notes: document.getElementById("notes").value.trim()
+        notes: document.getElementById("notes").value.trim(),
+        statut: document.getElementById("statut").value
       };
       if (index !== "") {
         lieux[index] = lieu;

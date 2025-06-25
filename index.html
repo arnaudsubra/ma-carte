@@ -139,7 +139,7 @@
 
           marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`);
           marker.on('click', () => {
-            const entry = document.querySelector(`.lieu-entry[data-id="${lieu.id}"]`);
+            const entry = document.getElementById(`lieu-${lieu.id}`);
             if (entry) {
               entry.scrollIntoView({ behavior: "smooth", block: "center" });
               entry.classList.add("highlight");
@@ -154,7 +154,7 @@
 
     function afficherListe() {
       document.getElementById("liste-lieux").innerHTML = lieux.map((lieu, index) => `
-        <div class="lieu-entry" data-id="${lieu.id}">
+        <div class="lieu-entry" id="lieu-${lieu.id}">
           <strong>${lieu.nom}</strong><br />
           ${lieu.adresse}<br />
           ${lieu.date || ''}<br />

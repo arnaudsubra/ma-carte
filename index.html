@@ -15,7 +15,7 @@
     .legend span { display: flex; align-items: center; gap: 5px; }
     .legend-box { width: 12px; height: 12px; display: inline-block; }
     #liste-lieux { padding: 20px; }
-    .lieu-entry { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+    .lieu-entry { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; scroll-margin-top: 80px; }
     .btns { display: flex; gap: 10px; flex-wrap: wrap; }
     @media (max-width: 600px) { #map { height: 300px; } }
   </style>
@@ -59,12 +59,6 @@
 
     let lieux = JSON.parse(localStorage.getItem('lieux')) || [];
     let markers = [];
-    let coordMemo = {};
-    const geocodeCache = {};
-
-    function genererID() {
-      return 'lieu_' + Math.random().toString(36).substr(2, 9);
-    }
 
     function getColor(statut) {
       switch (statut) {
@@ -78,35 +72,27 @@
     function ajouterMarqueurs() {
       markers.forEach(m => map.removeLayer(m));
       markers = [];
-      coordMemo = {};
       lieux.forEach((lieu) => {
-        if (lieu.lat && lieu.lon) {
-          let lat = parseFloat(lieu.lat);
-          let lon = parseFloat(lieu.lon);
-          let cle = lat.toFixed(5) + "," + lon.toFixed(5);
-          if (coordMemo[cle]) {
-            lat += Math.random() * 0.0008 - 0.0004;
-            lon += Math.random() * 0.0008 - 0.0004;
-          } else {
-            coordMemo[cle] = true;
-          }
-          let marker = L.circleMarker([lat, lon], {
-            radius: 8,
-            fillColor: getColor(lieu.statut),
-            color: "#000",
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.8
-          }).addTo(map);
-          marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}<br>${lieu.date || ''}`);
-          markers.push(marker);
-        }
+        if (!lieu.lat || !lieu.lon) return;
+        let marker = L.circleMarker([lieu.lat, lieu.lon], {
+          radius: 8,
+          fillColor: getColor(lieu.statut),
+          color: "#000",
+          weight: 1,
+          opacity: 1,
+          fillOpacity: 0.8
+        }).addTo(map);
+        marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`).on('click', () => {
+          const target = document.getElementById("lieu-" + lieu.id);
+          if (target) target.scrollIntoView({ behavior: "smooth" });
+        });
+        markers.push(marker);
       });
     }
 
     function afficherListe() {
       document.getElementById("liste-lieux").innerHTML = lieux.map((lieu) => `
-        <div class="lieu-entry">
+        <div class="lieu-entry" id="lieu-${lieu.id}">
           <strong>${lieu.nom}</strong><br />
           ${lieu.adresse}<br />
           ${lieu.date || ''}<br />
@@ -119,45 +105,36 @@
 
     document.getElementById("formulaire").addEventListener("submit", e => {
       e.preventDefault();
-      const id = document.getElementById("id-lieu").value || genererID();
+      const id = document.getElementById("id-lieu").value || 'lieu_' + Math.random().toString(36).substr(2, 9);
       const nom = document.getElementById("nom").value.trim();
       const adresse = document.getElementById("adresse").value.trim();
       const date = document.getElementById("date").value;
       const remarques = document.getElementById("remarques").value;
       const statut = document.getElementById("statut-lieu").value;
-      if (!nom || !adresse) return;
 
-      const traiterLieu = (lat, lon) => {
-        const lieu = { id, nom, adresse, date, remarques, statut, lat, lon };
-        const index = lieux.findIndex(l => l.id === id);
-        if (index !== -1) {
-          lieux[index] = lieu;
-        } else {
-          lieux.push(lieu);
-        }
-        localStorage.setItem("lieux", JSON.stringify(lieux));
-        afficherListe();
-        ajouterMarqueurs();
-        e.target.reset();
-        document.getElementById("id-lieu").value = '';
-        document.getElementById("btn-submit").innerText = 'Ajouter';
-      };
-
-      if (geocodeCache[adresse]) {
-        traiterLieu(...geocodeCache[adresse]);
-      } else {
-        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(adresse)}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data && data[0]) {
-              const coords = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-              geocodeCache[adresse] = coords;
-              traiterLieu(...coords);
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(adresse)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data[0]) {
+            const lat = parseFloat(data[0].lat);
+            const lon = parseFloat(data[0].lon);
+            const lieu = { id, nom, adresse, date, remarques, statut, lat, lon };
+            const index = lieux.findIndex(l => l.id === id);
+            if (index !== -1) {
+              lieux[index] = lieu;
             } else {
-              alert("Adresse introuvable");
+              lieux.push(lieu);
             }
-          });
-      }
+            localStorage.setItem("lieux", JSON.stringify(lieux));
+            afficherListe();
+            ajouterMarqueurs();
+            e.target.reset();
+            document.getElementById("id-lieu").value = '';
+            document.getElementById("btn-submit").innerText = 'Ajouter';
+          } else {
+            alert("Adresse introuvable");
+          }
+        });
     });
 
     function modifierLieu(id) {
@@ -202,8 +179,7 @@
       const reader = new FileReader();
       reader.onload = e => {
         try {
-          const data = JSON.parse(e.target.result);
-          lieux = data;
+          lieux = JSON.parse(e.target.result);
           localStorage.setItem("lieux", JSON.stringify(lieux));
           afficherListe();
           ajouterMarqueurs();

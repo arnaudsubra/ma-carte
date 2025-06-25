@@ -14,17 +14,18 @@
     .legend { display: flex; gap: 10px; padding: 10px; }
     .legend span { display: flex; align-items: center; gap: 5px; }
     .legend-box { width: 12px; height: 12px; display: inline-block; }
-    #liste-lieux { padding: 20px; }
-    .lieu-entry { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; scroll-margin-top: 80px; }
     .btns { display: flex; gap: 10px; flex-wrap: wrap; }
+    #liste-lieux { padding: 20px; }
+    .lieu-entry { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; scroll-margin-top: 100px; }
+    #loading { text-align: center; padding: 10px; display: none; }
     @media (max-width: 600px) { #map { height: 300px; } }
   </style>
 </head>
 <body>
   <h1>📍 Carte des lieux démarchés</h1>
   <div id="map"></div>
+  <div id="loading">Chargement des marqueurs…</div>
   <form id="formulaire">
-    <input type="hidden" id="id-lieu" />
     <label>Nom du lieu : <input type="text" id="nom" required /></label>
     <label>Adresse ou ville : <input type="text" id="adresse" required autocomplete="off" /></label>
     <label>Date (optionnel) : <input type="date" id="date" /></label>
@@ -36,7 +37,7 @@
         <option value="Confirmé">Confirmé</option>
       </select>
     </label>
-    <button type="submit" id="btn-submit">Ajouter</button>
+    <button type="submit">Ajouter ou mettre à jour</button>
     <div class="btns">
       <button type="button" onclick="exporterJSON()">📤 Exporter</button>
       <button type="button" onclick="toutEffacer()">🗑️ Tout effacer</button>
@@ -49,6 +50,7 @@
     <span><div class="legend-box" style="background-color: green;"></div>Confirmé</span>
   </div>
   <div id="liste-lieux"></div>
+
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
   <script>
     let map = L.map('map').setView([44.8378, -0.5792], 8);
@@ -59,6 +61,7 @@
 
     let lieux = JSON.parse(localStorage.getItem('lieux')) || [];
     let markers = [];
+    let coordMemo = {};
 
     function getColor(statut) {
       switch (statut) {
@@ -70,43 +73,57 @@
     }
 
     function ajouterMarqueurs() {
+      document.getElementById("loading").style.display = "block";
       markers.forEach(m => map.removeLayer(m));
       markers = [];
-      lieux.forEach((lieu) => {
-        if (!lieu.lat || !lieu.lon) return;
-        let marker = L.circleMarker([lieu.lat, lieu.lon], {
-          radius: 8,
-          fillColor: getColor(lieu.statut),
-          color: "#000",
-          weight: 1,
-          opacity: 1,
-          fillOpacity: 0.8
-        }).addTo(map);
-        marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`).on('click', () => {
-          const target = document.getElementById("lieu-" + lieu.id);
-          if (target) target.scrollIntoView({ behavior: "smooth" });
-        });
-        markers.push(marker);
+      coordMemo = {};
+      lieux.forEach((lieu, index) => {
+        if (lieu.lat && lieu.lon) {
+          let lat = parseFloat(lieu.lat);
+          let lon = parseFloat(lieu.lon);
+          let cle = lat.toFixed(5) + "," + lon.toFixed(5);
+          while (coordMemo[cle]) {
+            lat += Math.random() * 0.001 - 0.0005;
+            lon += Math.random() * 0.001 - 0.0005;
+            cle = lat.toFixed(5) + "," + lon.toFixed(5);
+          }
+          coordMemo[cle] = true;
+          let marker = L.circleMarker([lat, lon], {
+            radius: 8,
+            fillColor: getColor(lieu.statut),
+            color: "#000",
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.8
+          }).addTo(map);
+          marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`).on('click', () => {
+            const target = document.getElementById("lieu-" + index);
+            if (target) target.scrollIntoView({ behavior: "smooth" });
+          });
+          markers.push(marker);
+        }
       });
+      setTimeout(() => {
+        document.getElementById("loading").style.display = "none";
+      }, 300);
+      afficherListe();
     }
 
     function afficherListe() {
-      document.getElementById("liste-lieux").innerHTML = lieux.map((lieu) => `
-        <div class="lieu-entry" id="lieu-${lieu.id}">
+      document.getElementById("liste-lieux").innerHTML = lieux.map((lieu, index) => `
+        <div class="lieu-entry" id="lieu-${index}">
           <strong>${lieu.nom}</strong><br />
           ${lieu.adresse}<br />
           ${lieu.date || ''}<br />
           ${lieu.remarques || ''}<br />
-          <em>${lieu.statut}</em><br />
-          <button onclick="modifierLieu('${lieu.id}')">✏️ Modifier</button>
-          <button onclick="supprimerLieu('${lieu.id}')">🗑️ Supprimer</button>
+          <em>${lieu.statut}</em>
         </div>`).join('');
     }
 
     document.getElementById("formulaire").addEventListener("submit", e => {
       e.preventDefault();
-      const nom = document.getElementById("nom").value.trim();
-      const adresse = document.getElementById("adresse").value.trim();
+      const nom = document.getElementById("nom").value;
+      const adresse = document.getElementById("adresse").value;
       const date = document.getElementById("date").value;
       const remarques = document.getElementById("remarques").value;
       const statut = document.getElementById("statut-lieu").value;
@@ -117,60 +134,21 @@
           if (data && data[0]) {
             const lat = parseFloat(data[0].lat);
             const lon = parseFloat(data[0].lon);
-
-            let currentId = document.getElementById("id-lieu").value;
-            if (!currentId || !lieux.find(l => l.id === currentId)) {
-              currentId = 'lieu_' + Math.random().toString(36).substr(2, 9);
-            }
-
-            const lieu = { id: currentId, nom, adresse, date, remarques, statut, lat, lon };
-            const index = lieux.findIndex(l => l.id === currentId);
+            const lieu = { nom, adresse, date, remarques, statut, lat, lon };
+            const index = lieux.findIndex(l => l.nom === nom && l.adresse === adresse);
             if (index !== -1) {
               lieux[index] = lieu;
             } else {
               lieux.push(lieu);
             }
-
             localStorage.setItem("lieux", JSON.stringify(lieux));
-            afficherListe();
             ajouterMarqueurs();
             e.target.reset();
-            document.getElementById("id-lieu").value = '';
-            document.getElementById("btn-submit").innerText = 'Ajouter';
           } else {
             alert("Adresse introuvable");
           }
         });
     });
-
-    function modifierLieu(id) {
-      const lieu = lieux.find(l => l.id === id);
-      if (lieu) {
-        document.getElementById("id-lieu").value = lieu.id;
-        document.getElementById("nom").value = lieu.nom;
-        document.getElementById("adresse").value = lieu.adresse;
-        document.getElementById("date").value = lieu.date;
-        document.getElementById("remarques").value = lieu.remarques;
-        document.getElementById("statut-lieu").value = lieu.statut;
-        document.getElementById("btn-submit").innerText = 'Mettre à jour';
-      }
-    }
-
-    function supprimerLieu(id) {
-      lieux = lieux.filter(l => l.id !== id);
-      localStorage.setItem("lieux", JSON.stringify(lieux));
-      afficherListe();
-      ajouterMarqueurs();
-    }
-
-    function toutEffacer() {
-      if (confirm("Tout effacer ?")) {
-        lieux = [];
-        localStorage.removeItem("lieux");
-        afficherListe();
-        ajouterMarqueurs();
-      }
-    }
 
     function exporterJSON() {
       const blob = new Blob([JSON.stringify(lieux, null, 2)], { type: "application/json" });
@@ -187,7 +165,6 @@
         try {
           lieux = JSON.parse(e.target.result);
           localStorage.setItem("lieux", JSON.stringify(lieux));
-          afficherListe();
           ajouterMarqueurs();
         } catch {
           alert("Fichier invalide");
@@ -196,7 +173,14 @@
       reader.readAsText(event.target.files[0]);
     }
 
-    afficherListe();
+    function toutEffacer() {
+      if (confirm("Tout effacer ?")) {
+        lieux = [];
+        localStorage.removeItem("lieux");
+        ajouterMarqueurs();
+      }
+    }
+
     ajouterMarqueurs();
   </script>
 </body>

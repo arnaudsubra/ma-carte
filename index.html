@@ -31,7 +31,7 @@
     <label>Date (optionnel) : <input type="text" id="date" /></label>
     <label>Remarques : <textarea id="notes"></textarea></label>
     <label>Statut :
-      <select id="statut" autocomplete="off">
+      <select id="statut-lieu" autocomplete="off">
         <option value="en_attente">En attente</option>
         <option value="a_relancer">À relancer</option>
         <option value="confirme">Confirmé</option>
@@ -136,7 +136,7 @@
       document.getElementById("type").value = lieu.type || "";
       document.getElementById("date").value = lieu.date || "";
       document.getElementById("notes").value = lieu.notes || "";
-      document.getElementById("statut").value = lieu.statut || "en_attente";
+      document.getElementById("statut-lieu").value = lieu.statut || "en_attente";
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -156,7 +156,7 @@
         type: document.getElementById("type").value.trim(),
         date: document.getElementById("date").value.trim(),
         notes: document.getElementById("notes").value.trim(),
-        statut: document.getElementById("statut").value
+        statut: document.getElementById("statut-lieu").value
       };
       if (index !== "") {
         lieux[index] = lieu;

@@ -47,20 +47,25 @@
       display: flex;
       gap: 10px;
     }
-    #liste-lieux {
-      padding: 20px;
+    #loading {
+      text-align: center;
+      padding: 10px;
+      display: none;
     }
-    .lieu-entry {
+    .fiche {
       border: 1px solid #ccc;
       padding: 10px;
-      margin-bottom: 10px;
+      margin: 10px;
     }
   </style>
 </head>
 <body>
   <h1>📍 Carte des lieux démarchés</h1>
   <div id="map"></div>
+  <div id="loading">Chargement des marqueurs…</div>
+
   <form id="formulaire">
+    <input type="hidden" id="lieu-id" />
     <label>Nom du lieu : <input type="text" id="nom" required /></label>
     <label>Adresse ou ville : <input type="text" id="adresse" required autocomplete="off" /></label>
     <label>Date (optionnel) : <input type="date" id="date" /></label>
@@ -79,12 +84,14 @@
     </div>
     <input type="file" id="fichier-import" accept=".json" onchange="importerJSON(event)" />
   </form>
+
   <div class="legend">
     <span><div class="legend-box" style="background-color: blue;"></div>En attente</span>
     <span><div class="legend-box" style="background-color: red;"></div>À relancer</span>
     <span><div class="legend-box" style="background-color: green;"></div>Confirmé</span>
   </div>
-  <div id="liste-lieux"></div>
+
+  <div id="fiches"></div>
 
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
   <script>
@@ -95,6 +102,11 @@
     }).addTo(map);
 
     let lieux = JSON.parse(localStorage.getItem('lieux')) || [];
+    lieux.forEach(lieu => {
+      if (!lieu.id) lieu.id = crypto.randomUUID();
+    });
+    localStorage.setItem('lieux', JSON.stringify(lieux));
+
     let markers = [];
     let coordMemo = {};
 
@@ -108,9 +120,14 @@
     }
 
     function ajouterMarqueurs() {
+      document.getElementById("loading").style.display = "block";
       markers.forEach(m => map.removeLayer(m));
       markers = [];
       coordMemo = {};
+
+      const conteneur = document.getElementById("fiches");
+      conteneur.innerHTML = "";
+
       lieux.forEach((lieu, index) => {
         if (lieu.lat && lieu.lon) {
           let lat = parseFloat(lieu.lat);
@@ -131,32 +148,54 @@
             opacity: 1,
             fillOpacity: 0.8
           }).addTo(map);
-
-          marker.on('click', () => {
-            document.getElementById("lieu-" + index)?.scrollIntoView({ behavior: "smooth" });
-          });
-
           marker.bindPopup(`<b>${lieu.nom}</b><br>${lieu.adresse}`);
+          marker.on('click', () => {
+            document.getElementById(`fiche-${lieu.id}`)?.scrollIntoView({ behavior: "smooth" });
+          });
           markers.push(marker);
         }
+
+        const fiche = document.createElement("div");
+        fiche.className = "fiche";
+        fiche.id = `fiche-${lieu.id}`;
+        fiche.innerHTML = `
+          <b>${lieu.nom}</b><br>
+          ${lieu.adresse}<br>
+          ${lieu.date || ''}<br>
+          ${lieu.remarques || ''}<br>
+          <i>${lieu.statut}</i><br>
+          <button onclick="remplirFormulaire('${lieu.id}')">✏️ Modifier</button>
+          <button onclick="supprimerLieu('${lieu.id}')">🗑️ Supprimer</button>
+        `;
+        conteneur.appendChild(fiche);
       });
+      setTimeout(() => {
+        document.getElementById("loading").style.display = "none";
+      }, 300);
     }
 
-    function afficherListe() {
-      document.getElementById("liste-lieux").innerHTML = lieux.map((lieu, index) => `
-        <div class="lieu-entry" id="lieu-${index}">
-          <strong>${lieu.nom}</strong><br />
-          ${lieu.adresse}<br />
-          ${lieu.date || ''}<br />
-          ${lieu.remarques || ''}<br />
-          <em>${lieu.statut}</em><br />
-          <button onclick="remplirFormulaire(${index})">✏️ Modifier</button>
-          <button onclick="supprimerLieu(${index})">🗑️ Supprimer</button>
-        </div>`).join('');
+    function remplirFormulaire(id) {
+      const lieu = lieux.find(l => l.id === id);
+      document.getElementById("nom").value = lieu.nom;
+      document.getElementById("adresse").value = lieu.adresse;
+      document.getElementById("date").value = lieu.date || '';
+      document.getElementById("remarques").value = lieu.remarques || '';
+      document.getElementById("statut-lieu").value = lieu.statut;
+      document.getElementById("lieu-id").value = lieu.id;
+      document.getElementById("formulaire").scrollIntoView({ behavior: "smooth" });
+    }
+
+    function supprimerLieu(id) {
+      if (confirm("Supprimer ce lieu ?")) {
+        lieux = lieux.filter(l => l.id !== id);
+        localStorage.setItem("lieux", JSON.stringify(lieux));
+        ajouterMarqueurs();
+      }
     }
 
     document.getElementById("formulaire").addEventListener("submit", e => {
       e.preventDefault();
+      const id = document.getElementById("lieu-id").value || crypto.randomUUID();
       const nom = document.getElementById("nom").value;
       const adresse = document.getElementById("adresse").value;
       const date = document.getElementById("date").value;
@@ -169,40 +208,22 @@
           if (data && data[0]) {
             const lat = parseFloat(data[0].lat);
             const lon = parseFloat(data[0].lon);
-            const lieu = { nom, adresse, date, remarques, statut, lat, lon };
-            const index = lieux.findIndex(l => l.nom === nom && l.adresse === adresse);
+            const lieu = { id, nom, adresse, date, remarques, statut, lat, lon };
+            const index = lieux.findIndex(l => l.id === id);
             if (index !== -1) {
               lieux[index] = lieu;
             } else {
               lieux.push(lieu);
             }
             localStorage.setItem("lieux", JSON.stringify(lieux));
-            afficherListe();
             ajouterMarqueurs();
             e.target.reset();
+            document.getElementById("lieu-id").value = "";
           } else {
             alert("Adresse introuvable");
           }
         });
     });
-
-    function remplirFormulaire(index) {
-      const lieu = lieux[index];
-      document.getElementById("nom").value = lieu.nom;
-      document.getElementById("adresse").value = lieu.adresse;
-      document.getElementById("date").value = lieu.date || '';
-      document.getElementById("remarques").value = lieu.remarques || '';
-      document.getElementById("statut-lieu").value = lieu.statut;
-    }
-
-    function supprimerLieu(index) {
-      if (confirm("Supprimer ce lieu ?")) {
-        lieux.splice(index, 1);
-        localStorage.setItem("lieux", JSON.stringify(lieux));
-        afficherListe();
-        ajouterMarqueurs();
-      }
-    }
 
     function exporterJSON() {
       const blob = new Blob([JSON.stringify(lieux, null, 2)], { type: "application/json" });
@@ -218,8 +239,8 @@
       reader.onload = e => {
         try {
           lieux = JSON.parse(e.target.result);
+          lieux.forEach(lieu => { if (!lieu.id) lieu.id = crypto.randomUUID(); });
           localStorage.setItem("lieux", JSON.stringify(lieux));
-          afficherListe();
           ajouterMarqueurs();
         } catch {
           alert("Fichier invalide");
@@ -232,12 +253,10 @@
       if (confirm("Tout effacer ?")) {
         lieux = [];
         localStorage.removeItem("lieux");
-        afficherListe();
         ajouterMarqueurs();
       }
     }
 
-    afficherListe();
     ajouterMarqueurs();
   </script>
 </body>

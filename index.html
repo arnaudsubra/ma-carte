@@ -6,62 +6,18 @@
   <title>Carte des lieux démarchés</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-    }
-    h1 {
-      padding: 20px;
-      text-align: center;
-    }
-    #map {
-      height: 400px;
-      width: 100%;
-    }
-    form {
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    input, select, textarea, button {
-      font-size: 1em;
-      padding: 6px;
-    }
-    .legend {
-      display: flex;
-      gap: 10px;
-      padding: 10px;
-    }
-    .legend span {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-    .legend-box {
-      width: 12px;
-      height: 12px;
-      display: inline-block;
-    }
-    #liste-lieux {
-      padding: 20px;
-    }
-    .lieu-entry {
-      border: 1px solid #ccc;
-      padding: 10px;
-      margin-bottom: 10px;
-    }
-    .btns {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    @media (max-width: 600px) {
-      #map {
-        height: 300px;
-      }
-    }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    h1 { padding: 20px; text-align: center; }
+    #map { height: 400px; width: 100%; }
+    form { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+    input, select, textarea, button { font-size: 1em; padding: 6px; }
+    .legend { display: flex; gap: 10px; padding: 10px; }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .legend-box { width: 12px; height: 12px; display: inline-block; }
+    #liste-lieux { padding: 20px; }
+    .lieu-entry { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+    .btns { display: flex; gap: 10px; flex-wrap: wrap; }
+    @media (max-width: 600px) { #map { height: 300px; } }
   </style>
 </head>
 <body>
@@ -93,7 +49,6 @@
     <span><div class="legend-box" style="background-color: green;"></div>Confirmé</span>
   </div>
   <div id="liste-lieux"></div>
-
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
   <script>
     let map = L.map('map').setView([44.8378, -0.5792], 8);
@@ -170,7 +125,6 @@
       const date = document.getElementById("date").value;
       const remarques = document.getElementById("remarques").value;
       const statut = document.getElementById("statut-lieu").value;
-
       if (!nom || !adresse) return;
 
       const traiterLieu = (lat, lon) => {
